@@ -1,44 +1,34 @@
-#!/usr/bin/make -f
-
-APPFILE   := uuid.app
-VERSION   := $(shell sed -n -e '/vsn/ {s/.*,\s*"\([0-9][0-9.]*\)".*/\1/' \
-                            -e 'p' -e '}' src/$(APPFILE).src)
-
-PREFIX    ?= /usr
-ERL_ROOT  := $(PREFIX)/lib/erlang
-LIBDIR    := /lib
-DISTDIR   := uuid-$(VERSION)
-
-BEAMFILES := $(wildcard ebin/*.beam) $(wildcard test/*.beam)
+APPNAME=uuid
+REBAR=./rebar
+ERLC=erlc
 DIALYZER_PLT := erlang-uuid.plt
 
-all: build
+.PHONY:deps
 
-build: ebin/$(APPFILE)
-	erl -make
+all: deps compile
 
-ebin/$(APPFILE): src/$(APPFILE).src
-	cp $< $@
+./rebar:
+	erl -noshell -s inets start -s ssl start \
+		-eval 'httpc:request(get, {"https://raw.github.com/wiki/rebar/rebar/rebar", []}, [], [{stream, "./rebar"}])' \
+		-s inets stop -s init stop
+	chmod +x ./rebar
 
-clean:
-	-rm -rf ebin/$(APPFILE) $(BEAMFILES) $(DIALYZER_PLT)
 
-$(DIALYZER_PLT): build
+$(DIALYZER_PLT): compile
 	dialyzer --add_to_plt -r ebin --output_plt $(DIALYZER_PLT)
 
 dialyzer: $(DIALYZER_PLT)
 	dialyzer --plt $(DIALYZER_PLT) ebin/uuid.beam
 
-test: build
+compile: $(REBAR)
+	@$(REBAR) compile
+
+clean: $(REBAR)
+	@$(REBAR) clean
+
+deps: $(REBAR)
+	@$(REBAR) check-deps || (export GPROC_DIST=true; $(REBAR) get-deps)
+
+test: compile
 	erlc -W +debug_info +compressed +strip -o test/ test/*.erl
 	erl -noshell -pa ebin -pa test -eval "uuid_tests:test()" -eval "init:stop()"
-
-install: build
-	# create dist directory and install files
-	mkdir -p $(DESTDIR)$(ERL_ROOT)$(LIBDIR)/$(DISTDIR)/ebin
-	install -m0644 ebin/* $(DESTDIR)$(ERL_ROOT)$(LIBDIR)/$(DISTDIR)/ebin
-
-uninstall:
-	-rm -rf $(DESTDIR)$(ERL_ROOT)$(LIBDIR)/uuid-[0-9][0-9.]*
-
-.PHONY: all build clean dialyzer test install uninstall

@@ -70,6 +70,12 @@
 -export_type([uuid/0, uuid_string/0, urn/0]).
 
 
+-ifdef (use_now_0).
+compat_now() -> now().
+-else.
+compat_now() -> os:timestamp().
+-endif.
+
 %% =============================================================================
 %% UUID v1
 %% =============================================================================
@@ -98,7 +104,7 @@ uuid1_time() ->
     %% Transform unix epoch to 100 nanosecond intervals since 15 October 1582
     %% by adding offset to unix epoch and transforming microseconds epoch to
     %% nanoseconds.
-    {MegaSeconds, Seconds, MicroSeconds} = now(),
+    {MegaSeconds, Seconds, MicroSeconds} = compat_now(),
     UnixEpoch =
         (MegaSeconds * 1000000000000 + Seconds * 1000000 + MicroSeconds),
     Timestamp = ?nanosecond_intervals_offset +
